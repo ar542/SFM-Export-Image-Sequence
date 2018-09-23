@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <ui version="4.0">
- <class>Form</class>
- <widget class="QWidget" name="Form">
+ <class>RenderWindow</class>
+ <widget class="QWidget" name="RenderWindow">
   <property name="windowModality">
-   <enum>Qt::WindowModal</enum>
+   <enum>Qt::ApplicationModal</enum>
   </property>
   <property name="geometry">
    <rect>
@@ -39,7 +39,7 @@
     <enum>QLayout::SetFixedSize</enum>
    </property>
    <item>
-    <widget class="QLabel" name="label">
+    <widget class="QLabel" name="RenderPreview">
      <property name="frameShape">
       <enum>QFrame::Panel</enum>
      </property>
@@ -69,7 +69,7 @@
    <item>
     <widget class="QProgressBar" name="progressBar">
      <property name="value">
-      <number>24</number>
+      <number>0</number>
      </property>
      <property name="textVisible">
       <bool>true</bool>
@@ -86,21 +86,38 @@
     </widget>
    </item>
    <item>
-    <widget class="QPushButton" name="pushButton">
+    <widget class="QPushButton" name="Pause_Button">
      <property name="text">
-      <string>PushButton</string>
+      <string>Pause</string>
      </property>
     </widget>
    </item>
    <item>
-    <widget class="QPushButton" name="pushButton_2">
+    <widget class="QPushButton" name="Cancel_Button">
      <property name="text">
-      <string>PushButton</string>
+      <string>Cancel</string>
      </property>
     </widget>
    </item>
   </layout>
  </widget>
  <resources/>
- <connections/>
+ <connections>
+  <connection>
+   <sender>Cancel_Button</sender>
+   <signal>clicked()</signal>
+   <receiver>RenderWindow</receiver>
+   <slot>close()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>319</x>
+     <y>459</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>319</x>
+     <y>239</y>
+    </hint>
+   </hints>
+  </connection>
+ </connections>
 </ui>
