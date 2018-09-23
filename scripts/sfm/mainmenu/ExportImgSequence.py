@@ -2,55 +2,173 @@
 
 #
 #
-# Created: Thu Sep 20 19:35:30 2018
+# Created: Thu Sep 20 2018
 #      by: pyside-uic 0.2.15 running on PySide 1.2.4
 
 
 from PySide import QtCore, QtGui
 from PIL import ImageGrab
-import sfmApp ,sfmClipEditor
+import sfmApp ,sfmClipEditor,math
 
 
-
+#used to add an event system to sampling the same layout could
+#be used to add other events to sfm 
 class SfmSample(QtCore.QObject):
     
-    SamplingDone = QtCore.Signal()
-    FrameTime=0
-    Timer=QtCore.QElapsedTimer()
+
+    SamplingDone = QtCore.Signal() #conncent to this signal to know when sampling is done
+    Timer=QtCore.QElapsedTimer()  #used to time how long each frame Sampling takes
     def __init__(self):
        
         QtCore.QObject.__init__(self)
+        self.StatusBar= self.findtypeinlist(sfmApp.GetMainWindow(),QtGui.QStatusBar) #gets the QStatusBar that holds the current sample
+        self.StopChecking=False     
+        self.PrevSample=0
 
-    PrevSample=0
+	#returns a object of type from the children of a qwidget
+    def findtypeinlist(self,widget,typ,flag=False): 
+    
+	for i in widget.children():
+	    if type(i) is typ and i != flag:
+		    return i    
+	
+
+	#this will start an infinite loop that keeps checking if the sampling is every so millisec
     def BeginChecking(self):
         
-        if (sfmApp.GetHeadTimeInFrames()==10): return
-        currentsample=(int)(bar.children()[0].children()[-2].text().split(" ")[0])
+        if (self.StopChecking):
+            self.StopChecking=False             
+            return
+	
+        currentsample=(int)(self.StatusBar.children()[0].children()[-2].text().split(" ")[0])#gets the current sample number, 1 means done
         
-        if(self.PrevSample ==1 and currentsample>1):
+        if(self.PrevSample ==1 and currentsample>1):#this is a new frame, start timer 
             self.Timer.start()
         
         
-        if(currentsample==1 and self.PrevSample > 1):
-            #print(currentsample,self.PrevSample ) 
-            print(self.Timer.restart()/1000.0)
+        if(currentsample==1 and self.PrevSample > 1):#sampling done
+
+            print("Frame #"+(str)(sfmApp.GetHeadTimeInFrames())+" "+str(self.Timer.restart()/1000.0))#prints the frame time in sec
             self.SamplingDone.emit()
-           # DebugPrint()
-            #return
-        
+
         
         
         
         self.PrevSample=currentsample
+	
+	
+        #recalls the function after 200 millisecs lowering the time  will increase accuracy but will cause bottlenecks for the cpu resulting in longer sample times, 1000 millisecs = 1 sec
+        QtCore.QTimer.singleShot(200, lambda: self.BeginChecking())
+
+
+
+
+
+
+
+
+class Ui_RenderWindow(QtGui.QWidget):
+    def __init__(self,obj,ref):
+        super(Ui_RenderWindow, self).__init__()        
+        self.Renderwin=obj
+        self.MainDialogRef=ref
+        self.setupUi(self.Renderwin)   
+        self.Renderwin.show()
+        self.Renderwin.move(100,100)
+        self.Renderwin.closeEvent = self.closeEvent
+	
+        self.Sample=SfmSample()        
+        self.Sample.SamplingDone.connect(self.StartRendering)
+        self.Sample.BeginChecking() 
+    
+    def closeEvent(self, event):
+        # do stuff        
+        if True:
+            self.Sample.StopChecking=True            
+            event.accept() # let the window close   
+	    self.MainDialogRef.deleteLater()
+            self.Renderwin.deleteLater()
+
+        else:
+            event.ignore()    
         
-        QtCore.QTimer.singleShot(30, lambda: self.BeginChecking())
+    
+    #this gets called each time sampling is done
+    def StartRendering(self):
+        
+        
 
+	
+        self.MainDialogRef.ExportImage()
+        self.RenderPreview.setPixmap(QtGui.QPixmap(self.MainDialogRef.filename))     
 
+	
+	precent= math.ceil((float(sfmApp.GetHeadTimeInFrames()- self.MainDialogRef.StartFrame_spinBox.value())  /  (self.MainDialogRef.EndFrame_spinBox.value()-self.MainDialogRef.StartFrame_spinBox.value()))*100)
+	
+        self.progressBar.setValue ( precent)
+        sfmApp.SetHeadTimeInFrames(sfmApp.GetHeadTimeInFrames()+1)
+        
+	if (sfmApp.GetHeadTimeInFrames()>=self.MainDialogRef.EndFrame_spinBox.value()): #did we reach the last frame
+	    self.Sample.StopChecking=True
+	    self.Renderwin.close()
+	    self.close()
+	    return
+	
+    
+    
+    
+    
+    
+    
+    
+    
+    def setupUi(self, RenderWindow):
+        RenderWindow.setWindowFlags(QtCore.Qt.WindowStaysOnTopHint)
+        RenderWindow.setWindowModality(QtCore.Qt.ApplicationModal)
+        RenderWindow.resize(640, 480)
+        sizePolicy = QtGui.QSizePolicy(QtGui.QSizePolicy.Fixed, QtGui.QSizePolicy.Fixed)
+        sizePolicy.setHorizontalStretch(0)
+        sizePolicy.setVerticalStretch(0)
+        sizePolicy.setHeightForWidth(RenderWindow.sizePolicy().hasHeightForWidth())
+        RenderWindow.setSizePolicy(sizePolicy)
+        RenderWindow.setMinimumSize(QtCore.QSize(640, 480))
+        RenderWindow.setMaximumSize(QtCore.QSize(1298, 823))
+        self.verticalLayout = QtGui.QVBoxLayout(RenderWindow)
+        self.verticalLayout.setSizeConstraint(QtGui.QLayout.SetFixedSize)
+        self.verticalLayout.setObjectName("verticalLayout")
+        self.RenderPreview = QtGui.QLabel(RenderWindow)
+        self.RenderPreview.setFrameShape(QtGui.QFrame.Panel)
+        self.RenderPreview.setFrameShadow(QtGui.QFrame.Plain)
+        self.RenderPreview.setLineWidth(2)
+        self.RenderPreview.setText("")
+        self.RenderPreview.setPixmap(QtGui.QPixmap( QtCore.QDir.currentPath()+"/platform/tools/images/sfm/sfm_screencast_default.png"))
+        self.RenderPreview.setScaledContents(True)
+        self.RenderPreview.setWordWrap(False)
+        self.RenderPreview.setObjectName("RenderPreview")
+        self.verticalLayout.addWidget(self.RenderPreview)
+        self.progressBar = QtGui.QProgressBar(RenderWindow)
+        self.progressBar.setProperty("value", 0)
+        self.progressBar.setTextVisible(True)
+        self.progressBar.setOrientation(QtCore.Qt.Horizontal)
+        self.progressBar.setInvertedAppearance(False)
+        self.progressBar.setTextDirection(QtGui.QProgressBar.TopToBottom)
+        self.progressBar.setObjectName("progressBar")
+        self.verticalLayout.addWidget(self.progressBar)
+        self.Pause_Button = QtGui.QPushButton(RenderWindow)
+        self.Pause_Button.setObjectName("Pause_Button")
+        self.verticalLayout.addWidget(self.Pause_Button)
+        self.Cancel_Button = QtGui.QPushButton(RenderWindow)
+        self.Cancel_Button.setObjectName("Cancel_Button")
+        self.verticalLayout.addWidget(self.Cancel_Button)
 
+        self.retranslateUi(RenderWindow)
+        QtCore.QObject.connect(self.Cancel_Button, QtCore.SIGNAL("clicked()"), RenderWindow.close)
+        QtCore.QMetaObject.connectSlotsByName(RenderWindow)
 
-
-
-
+    def retranslateUi(self, RenderWindow):
+        RenderWindow.setWindowTitle(QtGui.QApplication.translate("RenderWindow", "Form", None, QtGui.QApplication.UnicodeUTF8))
+        self.Pause_Button.setText(QtGui.QApplication.translate("RenderWindow", "Pause", None, QtGui.QApplication.UnicodeUTF8))
+        self.Cancel_Button.setText(QtGui.QApplication.translate("RenderWindow", "Cancel", None, QtGui.QApplication.UnicodeUTF8))
 
 
 
@@ -65,25 +183,43 @@ class Ui_MainDialog(QtGui.QWidget):
         super(Ui_MainDialog, self).__init__()        
        
         self.setupUi(self)
+        self.show()
+        
+        self.filename=""
+        
+        
+     #sets up the render window
+    def RenderMovie(self):
+        
+        sfmApp.SetHeadTimeInFrames(self.StartFrame_spinBox.value())
+        self.RenderWindow = QtGui.QWidget()
+        Ui_RenderWindow(self.RenderWindow,self)
+        self.close()
         
         
         
         
         
+ 
+     
         
-    def RenderImage(self):
         
-        im = ImageGrab.grabclipboard()
+    def ExportImage(self):
         
-        filename=QtCore.QFileInfo(self.OutputPath_lineEdit.text()).path()+"/"+self.GetBaseFileName()+"_"+str(sfmApp.GetHeadTimeInFrames())+self.Format_comboBox.currentText()
-       # print filename
-        im.save(filename)          
+        sfm.console("sfm_export_image_to_clipboard")
+        
+        im = ImageGrab.grabclipboard()#grab the img from clipboard
+        
+        self.filename=QtCore.QFileInfo(self.OutputPath_lineEdit.text()).path()+"/"+self.GetBaseFileName()+"_"+str(sfmApp.GetHeadTimeInFrames())+self.Format_comboBox.currentText()
+    
+        im.save(self.filename) #saves file with frame#         
         
     def closeEvent(self, event):
         # do stuff
         
         if True:            
-            event.accept() # let the window close                       
+            event.accept() # let the window close     
+           # self.deleteLater()
         else:
             event.ignore()    
             
@@ -97,7 +233,7 @@ class Ui_MainDialog(QtGui.QWidget):
 
         if self.filename:
             self.OutputPath_lineEdit.setText(self.filename)
-            print(self.RenderImage())
+           
             
     def FrameCheck(self):          
         
@@ -284,7 +420,7 @@ class Ui_MainDialog(QtGui.QWidget):
         self.horizontalLayout_2.setContentsMargins(400, -1, -1, -1)
         self.horizontalLayout_2.setObjectName("horizontalLayout_2")
         self.Export_Button = QtGui.QPushButton(MainDialog)
-        self.Export_Button.clicked.connect(self.RenderImage)
+        self.Export_Button.clicked.connect(self.RenderMovie)
         
         
         sizePolicy = QtGui.QSizePolicy(QtGui.QSizePolicy.Maximum, QtGui.QSizePolicy.Fixed)
@@ -339,11 +475,10 @@ class Ui_MainDialog(QtGui.QWidget):
 
 
     
-if __name__ == "__main__":
-    import sys
 
 
 
 
-    MainDialog = Ui_MainDialog()
-    MainDialog.show()
+
+Ui_MainDialog()
+
